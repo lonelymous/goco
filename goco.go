@@ -6,9 +6,7 @@ import (
 	"github.com/go-ini/ini"
 )
 
-var Config interface{}
-
-func InitializeConfig(filePaths ...string) error {
+func InitializeConfig(config *interface{}, filePaths ...string) error {
 	filePath := "config.ini"
 	if len(filePaths) != 0 {
 		filePath = filePaths[0]
@@ -19,5 +17,5 @@ func InitializeConfig(filePaths ...string) error {
 		return err
 	}
 
-	return ini.MapTo(&Config, configFile)
+	return ini.MapTo(&config, configFile)
 }
