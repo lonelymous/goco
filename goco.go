@@ -1,6 +1,8 @@
 package goco
 
 import (
+	"errors"
+	"log"
 	"os"
 	"reflect"
 	"strconv"
@@ -12,6 +14,7 @@ import (
 // Initialize Config which decide to use docker or ini file
 func InitializeConfig(config interface{}) error {
 	if strings.ToLower(os.Getenv("DOCKER")) == "true" {
+		log.Println("Docker config enabled..")
 		return InitializeDockerConfig(config)
 	}
 
@@ -41,25 +44,25 @@ func InitializeDockerConfig(config interface{}) error {
 // Get Docker Tag
 func getDockerTag(config interface{}) error {
 	var err error
-	v := reflect.ValueOf(config).Elem() // Get the struct value using reflection
-	t := v.Type()                       // Get the struct type
+	v := reflect.ValueOf(config).Elem()
+	t := v.Type()
 	for i := 0; i < v.NumField(); i++ {
 		field := v.Field(i)
-		dockerTag := os.Getenv(t.Field(i).Tag.Get("docker"))
-
+		dockerTagValue := os.Getenv(t.Field(i).Tag.Get("docker"))
 		switch field.Kind() {
 		case reflect.String:
-			field.SetString(dockerTag)
+			field.SetString(dockerTagValue)
 		case reflect.Int:
-			i, err := strconv.Atoi(dockerTag)
+			i, err := strconv.Atoi(dockerTagValue)
 			if err != nil {
-				return err
+				return errors.New("Error while converting " + dockerTagValue + " to " + t.Field(i).Name)
 			}
 			field.SetInt(int64(i))
 		case reflect.Bool:
-			b, err := strconv.ParseBool(dockerTag)
+			b, err := strconv.ParseBool(dockerTagValue)
 			if err != nil {
-				return err
+				log.Println(errors.New("Error while converting " + dockerTagValue + " to " + t.Field(i).Name))
+				b = false
 			}
 			field.SetBool(b)
 		case reflect.Struct:
