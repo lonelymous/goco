@@ -15,6 +15,8 @@ import (
 type ServerConfig struct {
 	Host string
 	Port int
+	CertFile string
+	KeyFile string
 }
 
 func main() {
