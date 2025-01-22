@@ -9,25 +9,68 @@ import (
 	"strings"
 
 	"github.com/go-ini/ini"
+	"github.com/joho/godotenv"
 )
 
 // Debug Mode
-var debugMode bool = false
+var DebugMode bool = false
+var ConfigMode string = "ini"
 
 // Initialize Config which decide to use docker or ini file
-func InitializeConfig(config interface{}, debug ...bool) error {
+// parameters: DebugMode bool = false, ConfigMode string(ini, env, docker) = ini
+func InitializeConfig(config interface{}, parameters ...any) error {
 	// Check if debug is passed
-	if len(debug) != 0 {
-		debugMode = debug[0]
+	if len(parameters) == 1 {
+		DebugMode = parameters[0].(bool)
+		debugLog("Debug Mode Enabled..")
 	}
 
-	// Check if DOCKER env is set to true
-	if strings.ToLower(os.Getenv("DOCKER")) == "true" {
-		debugLog("Docker config enabled..")
+	if len(parameters) == 2 {
+		ConfigMode = parameters[1].(string)
+	} else {
+		// Check if DOCKER env is set to true
+		if strings.ToLower(os.Getenv("DOCKER")) == "true" {
+			debugLog("Docker config enabled..")
+			ConfigMode = "docker"
+		}
+
+		// Check if config.ini file is present
+		if _, err := os.Stat("config.ini"); err == nil {
+			debugLog("Config.ini file found..")
+			ConfigMode = "ini"
+		}
+
+		// Check if .env file is present
+		if _, err := os.Stat(".env"); err == nil {
+			debugLog(".env file found..")
+			ConfigMode = "env"
+		}
+	}
+
+	switch ConfigMode {
+	case "ini":
+		return InitializeIniConfig(config)
+	case "env":
+		return InitializeEnvironmentConfig(config)
+	case "docker":
 		return InitializeDockerConfig(config)
+	default:
+		return errors.New("Invalid Config Mode")
+	}
+}
+
+// Initialize Config from environment file
+func InitializeEnvironmentConfig(config interface{}, filePaths ...string) error {
+	// Load .env file if provided
+	filePath := ".env"
+	if len(filePaths) != 0 {
+		filePath = filePaths[0]
+	}
+	if err := godotenv.Load(filePath); err != nil {
+		return fmt.Errorf("failed to load env file: %w", err)
 	}
 
-	return InitializeIniConfig(config)
+	return getEnvironmentTag(config)
 }
 
 // Initialize Config from ini file
@@ -43,6 +86,59 @@ func InitializeIniConfig(config interface{}, filePaths ...string) error {
 	}
 
 	return ini.MapTo(config, configFile)
+}
+
+// Get Environment Tag
+func getEnvironmentTag(config interface{}) error {
+	var err error
+
+	// Populate struct fields with environment variables
+	v := reflect.ValueOf(config)
+	if v.Kind() != reflect.Ptr || v.Elem().Kind() != reflect.Struct {
+		return errors.New("config parameter must be a pointer to a struct")
+	}
+	v = v.Elem()
+
+	t := v.Type()
+	for i := 0; i < v.NumField(); i++ {
+		field := v.Field(i)
+		fieldType := t.Field(i)
+
+		envTag := fieldType.Tag.Get("env")
+		if envTag == "" {
+			continue // Skip fields without an "env" tag
+		}
+
+		envValue := os.Getenv(envTag)
+		if envValue == "" {
+			continue // Skip unset environment variables
+		}
+
+		switch field.Kind() {
+		case reflect.String:
+			field.SetString(envValue)
+		case reflect.Int:
+			intValue, err := strconv.Atoi(envValue)
+			if err != nil {
+				return fmt.Errorf("failed to convert %s to int for field %s: %w", envValue, fieldType.Name, err)
+			}
+			field.SetInt(int64(intValue))
+		case reflect.Bool:
+			boolValue, err := strconv.ParseBool(envValue)
+			if err != nil {
+				return fmt.Errorf("failed to convert %s to bool for field %s: %w", envValue, fieldType.Name, err)
+			}
+			field.SetBool(boolValue)
+		case reflect.Struct:
+			if err := InitializeEnvironmentConfig(field.Addr().Interface()); err != nil {
+				return fmt.Errorf("failed to initialize nested struct %s: %w", fieldType.Name, err)
+			}
+		default:
+			return fmt.Errorf("unsupported field type %s for field %s", field.Kind(), fieldType.Name)
+		}
+	}
+
+	return err
 }
 
 // Initialize Config from docker with docker tags
@@ -101,7 +197,7 @@ func getDockerTag(config interface{}, structTag ...string) error {
 
 // Debug Log
 func debugLog(message ...any) {
-	if debugMode {
+	if DebugMode {
 		fmt.Println(message...)
 	}
 }
