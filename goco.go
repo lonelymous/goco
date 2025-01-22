@@ -59,20 +59,6 @@ func InitializeConfig(config interface{}, parameters ...any) error {
 	}
 }
 
-// Initialize Config from environment file
-func InitializeEnvironmentConfig(config interface{}, filePaths ...string) error {
-	// Load .env file if provided
-	filePath := ".env"
-	if len(filePaths) != 0 {
-		filePath = filePaths[0]
-	}
-	if err := godotenv.Load(filePath); err != nil {
-		return fmt.Errorf("failed to load env file: %w", err)
-	}
-
-	return getEnvironmentTag(config)
-}
-
 // Initialize Config from ini file
 func InitializeIniConfig(config interface{}, filePaths ...string) error {
 	filePath := "config.ini"
@@ -88,8 +74,22 @@ func InitializeIniConfig(config interface{}, filePaths ...string) error {
 	return ini.MapTo(config, configFile)
 }
 
+// Initialize Config from environment file
+func InitializeEnvironmentConfig(config interface{}, filePaths ...string) error {
+	// Load .env file if provided
+	filePath := ".env"
+	if len(filePaths) != 0 {
+		filePath = filePaths[0]
+	}
+	if err := godotenv.Load(filePath); err != nil {
+		return fmt.Errorf("failed to load env file: %w", err)
+	}
+
+	return getEnvironmentTag(config)
+}
+
 // Get Environment Tag
-func getEnvironmentTag(config interface{}) error {
+func getEnvironmentTag(config interface{}, structTag ...string) error {
 	var err error
 
 	// Populate struct fields with environment variables
@@ -104,33 +104,33 @@ func getEnvironmentTag(config interface{}) error {
 		field := v.Field(i)
 		fieldType := t.Field(i)
 
-		envTag := fieldType.Tag.Get("env")
-		if envTag == "" {
-			continue // Skip fields without an "env" tag
+		envTag := t.Field(i).Tag.Get("env")
+
+		// Check if structTag is passed
+		if len(structTag) != 0 {
+			envTag = fmt.Sprintf("%s_%s", structTag[0], t.Field(i).Name)
 		}
 
-		envValue := os.Getenv(envTag)
-		if envValue == "" {
-			continue // Skip unset environment variables
-		}
+		envTagValue := os.Getenv(envTag)
+		debugLog("envTag:\t", envTag, "\t=>\tenvTagValue:\t", envTagValue)
 
 		switch field.Kind() {
 		case reflect.String:
-			field.SetString(envValue)
+			field.SetString(envTagValue)
 		case reflect.Int:
-			intValue, err := strconv.Atoi(envValue)
+			intValue, err := strconv.Atoi(envTagValue)
 			if err != nil {
-				return fmt.Errorf("failed to convert %s to int for field %s: %w", envValue, fieldType.Name, err)
+				return fmt.Errorf("failed to convert %s to int for field %s: %w", envTagValue, fieldType.Name, err)
 			}
 			field.SetInt(int64(intValue))
 		case reflect.Bool:
-			boolValue, err := strconv.ParseBool(envValue)
+			boolValue, err := strconv.ParseBool(envTagValue)
 			if err != nil {
-				return fmt.Errorf("failed to convert %s to bool for field %s: %w", envValue, fieldType.Name, err)
+				return fmt.Errorf("failed to convert %s to bool for field %s: %w", envTagValue, fieldType.Name, err)
 			}
 			field.SetBool(boolValue)
 		case reflect.Struct:
-			if err := InitializeEnvironmentConfig(field.Addr().Interface()); err != nil {
+			if err := getEnvironmentTag(field.Addr().Interface()); err != nil {
 				return fmt.Errorf("failed to initialize nested struct %s: %w", fieldType.Name, err)
 			}
 		default:
