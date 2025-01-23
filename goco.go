@@ -108,7 +108,7 @@ func getEnvironmentTag(config interface{}, structTag ...string) error {
 
 		// Check if structTag is passed
 		if len(structTag) != 0 {
-			envTag = fmt.Sprintf("%s_%s", structTag[0], t.Field(i).Name)
+			envTag = fmt.Sprintf("%s_%s", structTag[0], envTag)
 		}
 
 		envTagValue := os.Getenv(envTag)
@@ -159,7 +159,7 @@ func getDockerTag(config interface{}, structTag ...string) error {
 
 		// Check if structTag is passed
 		if len(structTag) != 0 {
-			dockerTag = fmt.Sprintf("%s_%s", structTag[0], t.Field(i).Name)
+			dockerTag = fmt.Sprintf("%s_%s", structTag[0], dockerTag)
 		}
 
 		dockerTagValue := os.Getenv(dockerTag)
