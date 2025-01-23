@@ -151,9 +151,10 @@ func getDockerTag(config interface{}, structTag ...string) error {
 	var err error
 	v := reflect.ValueOf(config).Elem()
 	t := v.Type()
+
 	for i := 0; i < v.NumField(); i++ {
 		field := v.Field(i)
-
+		fieldType := t.Field(i)
 		dockerTag := t.Field(i).Tag.Get("docker")
 
 		// Check if structTag is passed
@@ -168,25 +169,25 @@ func getDockerTag(config interface{}, structTag ...string) error {
 		case reflect.String:
 			field.SetString(dockerTagValue)
 		case reflect.Int:
-			i, err := strconv.Atoi(dockerTagValue)
+			intValue, err := strconv.Atoi(dockerTagValue)
 			if err != nil {
-				err = errors.New("Error while converting " + dockerTagValue + " to " + t.Field(i).Name + "\t" + err.Error())
+				err = errors.New("Error while converting " + dockerTag + " to " + fieldType.Name + "\t" + err.Error())
 				debugLog(err)
 				return err
 			}
-			field.SetInt(int64(i))
+			field.SetInt(int64(intValue))
 		case reflect.Bool:
-			b, err := strconv.ParseBool(dockerTagValue)
+			boolValue, err := strconv.ParseBool(dockerTagValue)
 			if err != nil {
-				err = errors.New("Error while converting " + dockerTagValue + " to " + t.Field(i).Name + "\t" + err.Error())
+				err = errors.New("Error while converting " + dockerTag + " to " + fieldType.Name + "\t" + err.Error())
 				debugLog(err)
-				b = false
+				boolValue = false
 			}
-			field.SetBool(b)
+			field.SetBool(boolValue)
 		case reflect.Struct:
 			err = getDockerTag(field.Addr().Interface(), dockerTag)
 			if err != nil {
-				err = errors.New("Error while getting docker tag for " + t.Field(i).Name + "\t" + err.Error())
+				err = errors.New("Error while getting docker tag for " + fieldType.Name + "\t" + err.Error())
 				debugLog(err)
 				return err
 			}
