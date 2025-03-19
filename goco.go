@@ -26,6 +26,7 @@ func InitializeConfig(config interface{}, parameters ...any) error {
 	}
 
 	if len(parameters) == 2 {
+		DebugMode = parameters[0].(bool)
 		ConfigMode = parameters[1].(string)
 	} else {
 		// Check if DOCKER env is set to true
@@ -130,7 +131,7 @@ func getEnvironmentTag(config interface{}, structTag ...string) error {
 			}
 			field.SetBool(boolValue)
 		case reflect.Struct:
-			if err := getEnvironmentTag(field.Addr().Interface()); err != nil {
+			if err := getEnvironmentTag(field.Addr().Interface(), envTag); err != nil {
 				return fmt.Errorf("failed to initialize nested struct %s: %w", fieldType.Name, err)
 			}
 		default:
